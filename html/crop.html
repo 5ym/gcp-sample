@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <title>cv</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta charset="utf-8">
+    <!-- Compiled and minified CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <!-- Compiled and minified JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <link rel="stylesheet" href="prism.css">
+    <script src="prism.js"></script>
+    <script
+            src="https://code.jquery.com/jquery-3.4.1.min.js"
+            integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+            crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="container">
+    <form id="post">
+        <div class = "file-field input-field">
+            <div class = "btn">
+                <span>Browse</span>
+                <input id="fi" required accept="image/*" type="file">
+            </div>
+            <div class = "file-path-wrapper">
+                <input class = "file-path validate" type = "text" placeholder = "choose image">
+            </div>
+        </div>
+        <button id="sub" class="btn">画像解析</button>
+    </form>
+    <div id="dr"></div>
+</div>
+<script>
+    $('#fi').on('change', function() {
+        file = $(this)[0].files[0];
+        reader  = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onloadend = function() {
+            $("#dr").html('<img src="'+reader.result+'" id="pre" style="width:100%" class="materialboxed">');
+            $("#sub").css('display', 'block');
+            M.AutoInit();
+        };
+    });
+    $('#post').submit(function(event) {
+        event.preventDefault();
+        $('.but').remove();
+        post = $(this);
+        post.append('<p id="ch">確認中</p>');
+        arr = reader.result.split(',');
+        res = $.ajax({
+            url:'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyAbdZsqhLKVsi0vjMgm0Ic2gPF9UXMEVmg',
+            type:'POST',
+            contentType: 'application/JSON',
+            dataType : 'JSON',
+            data: '{"requests":{"image":{"content":"'+arr[1]+'"},"features":{"type":"CROP_HINTS"}}}'
+        }).done(function() {
+            post[0].reset();
+            $("#sub").css('display', 'none');
+            $('#ch').remove();
+            $('#dr').append('<pre><code class="language-json">'+JSON.stringify(res.responseJSON.responses[0], null, 4)+'</code></pre>');
+            Prism.highlightAll();
+            console.log(res.responseJSON.responses[0]);
+        });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <title>cv</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta charset="utf-8">
+    <!-- Compiled and minified CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <!-- Compiled and minified JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+    <link rel="stylesheet" href="prism.css">
+    <script src="prism.js"></script>
+    <script
+            src="https://code.jquery.com/jquery-3.4.1.min.js"
+            integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+            crossorigin="anonymous"></script>
+</head>
+<body>
+<div class="row">
+    <div class="col s6">
+        <form id="post">
+            <div class = "file-field input-field">
+                <div class = "btn">
+                    <span>Browse</span>
+                    <input id="fi" required accept="image/*" type="file">
+                </div>
+                <div class = "file-path-wrapper">
+                    <input class = "file-path validate" type = "text" placeholder = "choose image">
+                </div>
+            </div>
+            <button id="sub" class="btn">画像解析</button>
+        </form>
+        <div id="dr"></div>
+    </div>
+    <div id="result" class="col s6"></div>
+</div>
+<script>
+    $('#fi').on('change', function() {
+        file = $(this)[0].files[0];
+        reader  = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onloadend = function() {
+            $("#dr").html('<img src="'+reader.result+'" id="pre" style="width:100%" class="materialboxed">');
+            $('#result').html('');
+            $("#sub").css('display', 'block');
+            M.AutoInit();
+        };
+    });
+    $('#post').submit(function(event) {
+        event.preventDefault();
+        $('.but').remove();
+        post = $(this);
+        post.append('<p id="ch">確認中</p>');
+        arr = reader.result.split(',');
+        res = $.ajax({
+            url:'https://vision.googleapis.com/v1/images:annotate?key=AIzaSyAbdZsqhLKVsi0vjMgm0Ic2gPF9UXMEVmg',
+            type:'POST',
+            contentType: 'application/JSON',
+            dataType : 'JSON',
+            data: '{"requests":{"image":{"content":"'+arr[1]+'"},"features":{"type":"DOCUMENT_TEXT_DETECTION"}}}'
+        }).done(function() {
+            post[0].reset();
+            $("#sub").css('display', 'none');
+            $('#ch').remove();
+            bea = {};
+            bea.cash = false; // 現金
+            bea.date = false; // 来店日
+            bea.visitor = false; // 来店人数
+            bea.irregular = {
+                'retention': false,
+                'reissue': false,
+                'practice': false,
+                'cancel': false,
+                'provisional': false
+            }; // イレギュラー表示
+            res.responseJSON.responses[0]['fullTextAnnotation']['text'].split("\n").forEach(function (text) {
+                // 来店日時取得
+                if(text.search(/年|月|日|時|分|秒/) !== -1) {
+                    year = text.match(/\d+?年/) ? text.match(/(\d+?)年/)[1] : null;
+                    month = text.match(/\d+?月/) ? text.match(/(\d+?)月/)[1] : null;
+                    day = text.match(/\d+?日/) ? text.match(/(\d+?)日/)[1] : null;
+                    hour = text.match(/\d+?時/) ? text.match(/(\d+?)時/)[1] : null;
+                    minute = text.match(/\d+?分/) ? text.match(/(\d+?)分/)[1] : null;
+                    second = text.match(/\d+?秒/) ? text.match(/(\d+?)秒/)[1] : null;
+                    if(year || month || day || hour || minute || second) {
+                        if(!bea.date) bea.date = [];
+                        bea.date.push(year+'/'+month+'/'+day+' '+hour+'-'+minute+'-'+second);
+                    }
+                }
+                // レシート内金額表示全取得
+                if(text.search(/\xA5/) !== -1) {
+                    text.replace(/,/g, '').match(/\d+/g).forEach(function (amount) {
+                        if(!bea.amount) bea.amount = [];
+                        bea.amount.push(amount);
+                    });
+                }
+                // 現金判定
+                if(text.search(/現金/) !== -1) {
+                    bea.cash = true;
+                }
+                // 来店人数取得
+                if(text.search(/人|名/) !== -1) {
+                    text.match(/(\d+)/g).forEach(function (visitor) {
+                        if(!bea.visitor) bea.visitor = [];
+                        if(visitor[1])
+                            bea.visitor.push(visitor[1]);
+                    });
+                }
+                // イレギュラー
+                if(text.search(/控え|保留/) !== -1) {
+                    bea.irregular.retention = true;
+                }
+                if(text.search(/訂正|再発行/) !== -1) {
+                    bea.irregular.reissue = true;
+                }
+                if(text.search(/トレーニング|練習/) !== -1) {
+                    bea.irregular.practice = true;
+                }
+                if(text.search(/中止|キャンセル/) !== -1) {
+                    bea.irregular.cancel = true;
+                }
+                if(text.search(/仮/) !== -1) {
+                    bea.irregular.provisional = true;
+                }
+            });
+            // レシート内で二番目に大きい数字を取得
+            bea.amount.sort(
+                function(a,b){
+                    return (a < b ? 1 : -1);
+                }
+            );
+            bea.amount = bea.amount[1];
+            $('#result').append('<pre id="result"><code class="language-json">'+JSON.stringify(bea, null, 4)+'</code></pre>');
+            Prism.highlightAll();
+            console.log(res.responseJSON.responses[0]);
+        });
+    });
+</script>
+</body>
+</html>
